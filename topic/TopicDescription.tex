@@ -1,0 +1,54 @@
+\documentclass[11pt]{article}
+
+
+\usepackage{booktabs}
+\usepackage{blindtext}
+\usepackage{graphicx}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{amsmath}
+\usepackage{bm}
+\usepackage{empheq}
+\usepackage[most]{tcolorbox}
+\usepackage[a4paper,width=150mm,top=30mm,bottom=30mm]{geometry}
+\usepackage{esint}
+\newcommand*\diff{\mathop{}\!\mathrm{d}}
+
+
+
+\begin{document}
+\begin{center}
+\huge
+{Real space GW solver for applications in non-translation invariant systems.}
+
+\vspace{0.5cm}
+\large
+{Master student: Casper Pijnenburg}
+
+\vspace{0.1cm}
+\large
+{Supervisor: Dr. Malte Rösner, Theory of Condensed Matter department}
+
+\vspace{0.1cm}
+\large
+{Daily supervisor: Yann in 't Veld MSc}
+
+\vspace{0.1cm}
+\large
+{Second reader: Prof. dr. W.J.P. Beenakker, Theoretical High Energy Physics}
+
+\end{center}
+\section*{Goal}
+The goal of this Master project is to implement a real-space GW solver and apply it to systems without
+translation invariance, such as systems with lattice impurities or inhomogeneous screening environments.
+\section*{Approach}
+The solver will be written in the context of TRIQS, a numerical toolbox for many-body quantum physics calculations, and implemented as part of the TPRF package.
+From TRIQS we will use the Green function containers, which allow for efficient representation of Green function objects and for easy use of operations such as Fourier transformations. The real-space GW solver will first be implemented in Python and thoroughly tested against exact solutions and to the TRIQS exact diagonalization solver for small (2 to 6 orbital) systems. Then, the computationally expensive functions within the solver will be implemented in C++ and parallelized where needed.
+With a well tested, efficient real-space GW solver we will investigate material systems which are not translationally invariant, such as systems with lattice impurities or systems with inhomogenous screening environments. The aim is to be able to treat system sizes on the order of $10^4$ orbitals.
+\section*{Schedule}
+Currently, about 4 months into the project, we have a real-space GW solver implemented in Python, which we are currently testing against exact solutions and exact diagonalization. In the coming month we aim to understand where the GW approximation break down.
+Once we understand the limits of the method, we will finalize implementing the numerically intensive parts of the code in C++ and parallelize where needed. In the following months, we will apply the method to a translationally invariant system.
+The last month is left for writing the thesis, which we aim to submit in early to mid July.
+\thispagestyle{empty}
+
+\end{document}

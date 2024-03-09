@@ -1,0 +1,53 @@
+\documentclass[12pt]{article}
+
+\usepackage[english]{babel}
+\usepackage{blindtext}
+\usepackage{graphicx}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{amsmath}
+\usepackage{bbold}
+\usepackage{bm}
+\usepackage{physics}
+\usepackage[a4paper, width = 185mm, top = 15mm, bottom = 15mm]{geometry}
+\usepackage{calligra}
+\usepackage{float}
+
+\DeclareMathAlphabet{\mathcalligra}{T1}{calliga}{m}{n}
+\DeclareFontShape{T1}{calligra}{m}{n}{<->s*[2.2]callig15}{}
+
+\newcommand{\scripty}[1]{\ensuremath{\mathcalligra{#1}}}
+\renewcommand* \d{\mathop{}\!\mathrm{d}}
+
+
+
+\begin{document}
+\noindent
+$$W = (I-VP)^{-1}V$$
+with
+$$V = \begin{pmatrix}
+\tilde{V} & V\\
+V & \tilde{V}
+\end{pmatrix}\text{ and } P = \begin{pmatrix}
+P^\uparrow & 0\\
+0 & P^\downarrow
+\end{pmatrix}$$
+So we have:
+$$I-VP=\begin{pmatrix}
+I - \tilde{V}P^\uparrow & -VP^\downarrow\\
+-VP^\uparrow & I-\tilde{V}P^\downarrow
+\end{pmatrix}$$
+The inverse is then given by:
+$$(I-VP)^{-1}=\begin{pmatrix}
+(I-\tilde{V}P^\uparrow)^{-1} + (I-\tilde{V}P^\uparrow)^{-1}VP^\downarrow SVP^\uparrow(I-\tilde{V}P^\uparrow)^{-1} & (I-\tilde{V}P^\uparrow)^{-1}VP^\downarrow S\\
+SVP^\uparrow(I-\tilde{V}P^\uparrow)^{-1} & S
+\end{pmatrix}$$
+With $S=(I-\tilde{V}P^\downarrow-VP^\uparrow (I-\tilde{V}P^\uparrow)^{-1}VP^\downarrow)^{-1}$
+So we have:
+\begin{align*}
+W^\uparrow &= ((I-\tilde{V}P^\uparrow)^{-1} + (I-\tilde{V}P^\uparrow)^{-1}VP^\downarrow SVP^\uparrow(I-\tilde{V}P^\uparrow)^{-1} )\tilde{V} + (I-\tilde{V}P^\uparrow)^{-1}VP^\downarrow S V\\
+W^\downarrow &= SVP^\uparrow(I-\tilde{V}P^\uparrow)^{-1}V + S\tilde{V}
+\end{align*}
+
+
+\end{document}

@@ -1,0 +1,237 @@
+\documentclass[12pt]{article}
+
+\usepackage[english]{babel}
+\usepackage{blindtext}
+\usepackage{graphicx}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{amsmath}
+\usepackage{bbold}
+\usepackage{bm}
+\usepackage{physics}
+\usepackage[a4paper, width = 185mm, top = 15mm, bottom = 15mm]{geometry}
+\usepackage{calligra}
+
+
+\usepackage{listings}
+\usepackage{xcolor}
+
+\definecolor{codegreen}{rgb}{0.259,0.89,0.122}
+\definecolor{codegray}{rgb}{0.184,0.82,0.5}
+\definecolor{codepurple}{rgb}{0.851,0,0.094}
+\definecolor{codewhite}{rgb}{0.9,0.90,1.0}
+\definecolor{backcolour}{rgb}{0.2,0.2,0.2}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegray},
+    keywordstyle=\color{codegreen},
+    numberstyle=\tiny\color{black},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize\color{codewhite},
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+
+\lstset{style=mystyle}
+
+\DeclareMathAlphabet{\mathcalligra}{T1}{calliga}{m}{n}
+\DeclareFontShape{T1}{calligra}{m}{n}{<->s*[2.2]callig15}{}
+
+\newcommand{\scripty}[1]{\ensuremath{\mathcalligra{#1}}}
+\renewcommand* \d{\mathop{}\!\mathrm{d}}
+
+
+
+\begin{document}
+\noindent
+We can find a good way to construct $G^0_{ab}(i\omega_n)$ later, perhaps it can be done simply in momentum space when we leave out the perturbation but for the Hubbard dimer I'll just use the exact fully interacting Green function and set the interactions to zero, i.e. $U\to 0$. Here $a$ and $b$ represent spacial indices, the spin doesn't need to be explicitly taken into account for the Hubbard dimer at half filling.\\
+\\
+With a given $G^0_{ab}(i\omega_n)$ we can find the polarization as:
+\begin{equation}
+\Pi_{abcd}(\tau) = -G_{da}(\tau)G_{bc}^T(-\tau)
+\end{equation}
+Where $G_{ab}(\tau)=\mathcal{F}_{i\omega_n\to\tau}\{G_{ab}(i\omega_n)\}$
+This is implemented as follows:
+\begin{lstlisting}[language=Python]
+def polarization(self, G):
+        
+    G = make_gf_from_fourier(G)   
+    P = make_gf_from_fourier(BlockGf(mesh = self.bmesh, gf_struct = self.gf_struct, target_rank = 4))
+        
+    for name, g in P: 
+        indices = [0, 1]
+        for a, b, c, d in product(indices, indices, indices, indices):
+            P[name].data[:, a, b, c, d] = -G[name].data[:, d, a] * G[name].transpose().data[::-1, b, c]
+
+    return P
+\end{lstlisting}
+Here \texttt{self.bmesh} is the bosonic Matsubara frequency mesh and later on I'll also use the fermionic mesh \texttt{self.fmesh}. The structure of the Green function and all the other terms are defined by \texttt{self.gf\_struct = [('up', 2), ('dn', 2)]}.\\
+\\
+The Coulomb potential $V_{abcd}$ is a given and together with the polarization we can find the full screened potential:
+\begin{equation}
+W_{abcd}(i\omega_n)=V_{abcd}+\sum_{efgh}V_{abef}\Pi_{fegh}(i\omega_n)W_{hgcd}(i\omega_n)
+\end{equation}
+For which we have to Fourier transform the polarization: $\Pi_{abcd}(i\omega_n)=\mathcal{F}_{\tau\to i\omega_n}\{\Pi_{abcd}(\tau)\}$. This is implemented as follows:
+\begin{lstlisting}[language=Python]
+def screenedPotential(self, P, v):
+    P = make_gf_from_fourier(P)
+        
+    W = BlockGf(mesh = self.bmesh, gf_struct = self.gf_struct, target_rank = 4)
+
+    reshaped = BlockGf(mesh = self.bmesh, gf_struct = [('up', 4), ('dn', 4)], target_rank = 2)
+
+    v_reshaped = reshaped.copy()
+    P_reshaped = reshaped.copy()
+    idm = reshaped.copy()
+
+    size = np.shape(W['up'].data)[0]
+
+    for name, g, in W:
+        v_reshaped[name].data[:] = v[name].data.reshape(size, 4, 4)
+        P_reshaped[name].data[:] = P[name].data.reshape(size, 4, 4)
+        idm[name].data[:] = np.eye(4)
+
+    W_reshaped = (idm - 2 * v_reshaped * P_reshaped).inverse() * v_reshaped
+
+    for name, g in W:
+        W[name].data[:] = W_reshaped[name].data.reshape(size, 2, 2, 2, 2)
+
+    return W
+\end{lstlisting}
+\newpage
+\noindent
+What the code does is transform the Green function objects from $(2, 2, 2, 2)$ matrices to $(4, 4)$ matrices and then inverts the Dyson equation: $W=(1-2v\Pi)^{-1}v$. The factor 2 for the polarization is also still there, regardless of the spin flag. For the computation of the self energy the full screened potential is split up into a dynamical part dependent of $i\omega_n$ and a static part:
+\begin{equation}
+W_{abcd}(i\omega_n)=\tilde{W}_{abcd}(i\omega_n)+V_{abcd}
+\end{equation}
+The self energy is then obtained from just the dynamical part, the static contribution is added later. For the self energy we have:
+\begin{equation}
+\tilde{\Sigma}_{ab}(\tau)=-\sum_{cd}\tilde{W}_{abcd}(\tau)G_{cd}(\tau)
+\end{equation}
+For which just the dynamical part of the screened interaction was Fourier transformed: $\tilde{W}_{abcd}(\tau)=\mathcal{F}_{i\omega_n\to\tau}\{\tilde{W}_{abcd}(i\omega_n)\}$. This was implemented as follows:
+\begin{lstlisting}[language=Python]
+def selfEnergy(self, G, W):
+        
+    G = make_gf_from_fourier(G)     
+    W_dynamic = make_gf_from_fourier(W - self.v)
+    sigma = make_gf_from_fourier(BlockGf(mesh = self.fmesh, gf_struct = self.gf_struct, target_rank = 2))
+    cpy = sigma.copy()
+
+    for name, g in sigma:
+        indices = [0, 1]
+        for a, b in product(indices, indices):
+            acc = cpy.copy()          
+            indices = [0, 1]
+            for c, d in product(indices, indices):
+                acc[name].data[:, a, b] += -W_dynamic[name].data[:, a, c, b, d] * G[name].data[:, c, d]
+                
+            sigma[name].data[:, a, b] = acc[name].data[:, a, b]
+
+    return sigma
+\end{lstlisting}
+Note that the indices for the dynamic part of the screened potential are different than in the equation. This gives the correct result, perhaps due to the reshaping of the data? The contribution of the neglected static part of the full screened potential is computed as follows:
+\begin{lstlisting}[language=Python]
+def density(self, G):
+    rho = BlockGf(mesh = self.bmesh, gf_struct = self.gf_struct, target_rank = 2)
+    for name, g in G:
+        rho[name].data[:] = G[name].density()
+    return rho
+
+def static(self, G, V):
+    rho = self.density(G)
+
+    static = BlockGf(mesh = self.fmesh, gf_struct = self.gf_struct, target_rank = 2)
+        
+    for name, g in static:
+        indices = [0, 1]
+        for a, b in product(indices, indices):
+            static[name].data[:-1, a, b] = self.v[name].data[:, a, b, a, b] * rho[name].data[:, a, b]
+            static[name].data[-1, a, b] = self.v[name].data[-1, a, b, a, b] * rho[name].data[-1, a, b]  # Add last element as bmesh and fmesh are not the same size
+           
+    return static
+\end{lstlisting}
+\newpage
+\noindent
+This implementation comes from:
+\begin{align}
+\Sigma_{ab}(\tau) - \tilde{\Sigma}_{ab}(\tau)&=-\mathcal{F}_{i\omega_n\to\tau}\{V_{abab}\}\mathcal{F}_{i\omega_n\to\tau}\{G_{ab}(i\omega_n)\}\\
+\mathcal{F}_{\tau\to i\omega_n}\{\Sigma_{ab}(\tau) - \tilde{\Sigma}_{ab}(\tau)\}&=-\mathcal{F}_{\tau\to i\omega_n}\{\mathcal{F}_{i\omega_n\to\tau}\{V_{abab}\}\mathcal{F}_{i\omega_n\to\tau}\{G_{ab}(i\omega_n)\}\}\\
+&=-(V_{abab}*G_{ab})(i\omega_n)\notag\\
+&=-V_{abab}\dfrac{1}{\beta}\sum_n G_{ab}(i\omega_n)\notag\\
+&=V_{abab}\rho_{ab}\notag\\
+&=\Sigma^\text{static}_{ab}\notag
+\end{align}
+We have two more similar terms, the Hartree term and the Fock term:
+\begin{align}
+\Sigma^\text{Hartree}_{ab}&=\sum_{cd}V_{abcd}\rho_{cd}\\
+\Sigma^\text{Fock}_{ab}&=-\sum_{cd}V_{acdb}\rho_{dc}
+\end{align}
+These terms are implemented as follows:
+\begin{lstlisting}[language=Python]
+def hartree(self, v, G):
+    rho = self.density(G)
+    
+    hartree = BlockGf(mesh = self.fmesh, gf_struct = self.gf_struct, target_rank = 2)
+    cpy = hartree.copy()
+            
+    for name, g in hartree:
+        indices = [0, 1]
+        for a, b in product(indices, indices):
+            acc = cpy.copy()          
+            indices = [0, 1]
+            for c, d in product(indices, indices):
+                acc[name].data[:-1, a, b] += v[name].data[:, a, b, c, d] * rho[name].data[:, c, d]
+                acc[name].data[-1, a, b] += v[name].data[-1, a, b, c, d] * rho[name].data[-1, c, d]
+
+            hartree[name].data[:, a, b] = acc[name].data[:, a, b]
+                
+    return hartree
+
+def fock(self, v, G):
+    rho = self.density(G)
+    
+    fock = BlockGf(mesh = self.fmesh, gf_struct = self.gf_struct, target_rank = 2)
+    cpy = fock.copy()
+            
+    for name, g in fock:
+        indices = [0, 1]
+        for a, b in product(indices, indices):
+            acc = cpy.copy()          
+            indices = [0, 1]
+            for c, d in product(indices, indices):
+                acc[name].data[:-1, a, b] += v[name].data[:, a, c, d, b] * rho[name].data[:, d, c]
+                acc[name].data[-1, a, b] += v[name].data[-1, a, c, d, b] * rho[name].data[-1, d, c]
+
+            fock[name].data[:, a, b] = -acc[name].data[:, a, b]
+                
+    return fock
+\end{lstlisting}
+\newpage
+\noindent
+The full self energy is then given by:
+\begin{equation}
+\Sigma_{ab}(i\omega_n)=\mathcal{F}_{\tau\to i\omega_n}\{\tilde{\Sigma}_{ab}(\tau)\}+\Sigma^\text{static}_{ab}+\Sigma^\text{Hartree}_{ab}+\Sigma^\text{Fock}_{ab}
+\end{equation}
+Flags are implemented on whether or not to include each term. If only the static term is added, the implementation completely agrees with the exact solutions given in the paper. The TRIQS tprf implementation for GW ignores the static term so when it's neglected my, implementation agrees with Hugo's implementation for all the possible combinations of Hartree and Fock flags, as well as the spinless flag which changes the Coulomb potential. Though in the case of not spinless, the Hartree term has to be added analytically as \texttt{ + self.U / 2}.\\
+\\
+Lastly the interacting GW Green function is obtained by:
+\begin{equation}
+G_{ab}^\text{GW}(i\omega_n)=((G^0_{ab})^{-1}(i\omega_n)-\Sigma_{ab}(i\omega_n))^{-1}
+\end{equation}
+This is simply implemented as:
+\begin{lstlisting}[language=Python]
+def greenFunction(self, G0, sigma):
+    return (G0.inverse() - sigma).inverse()
+\end{lstlisting}
+Though perhaps I should implement a proper Dyson equation solver that also corrects the chemical potential to the chosen occupation. Though for 1-shot GW this doesn't seem to matter.
+
+\end{document}
