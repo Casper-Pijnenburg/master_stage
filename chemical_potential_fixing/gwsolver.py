@@ -20,20 +20,22 @@ class GWSolver():
     def __init__(self,
                  g0_w, V, self_interactions = False,
                  hartree_flag = True, fock_flag = True,
-                 mu = 0, N_fix = False, N_tol = 1e-3, max_iter = 1, full_mesh = False, verbose = False):
+                 N_fix = False, N_tol = 1e-5, max_iter = 1, mu_0 = 0.0, mu_gw = 0.0, full_mesh = False, verbose = False):
         
 
         self.self_interactions, self.hartree_flag, self.fock_flag = self_interactions, hartree_flag, fock_flag
         self.N_fix, self.N_tol = N_fix, N_tol
-        self.mu = mu
+        self.mu_0 = mu_0
+        self.mu_gw = mu_gw
         self.full_mesh = full_mesh
         self.verbose = verbose
+
         
 
         self.blocks = [name for name, g in g0_w]
         self.target_shape = g0_w[self.blocks[0]][Idx(0)].shape
 
-        self.g0_w, self.mu0 = self.dyson_equation(g0_w, self.mu, sigma_w = None, N_fix = self.N_fix)
+        self.g0_w, self.mu_0 = self.dyson_equation(g0_w, self.mu_0, sigma_w = None, N_fix = self.N_fix)
         if self.verbose:
             print(f'g0_w occupation: {self.N(self.g0_w)} at chemical potential {self.mu0}')
 
@@ -63,7 +65,7 @@ class GWSolver():
             self.W_w = screened_potential(self.P_w, self.V, self.self_interactions, 8)
             self.sigma_w += dyn_self_energy(self.g_w, self.W_w, V, self.self_interactions, 8)
 
-            self.g_w, self.mu = self.dyson_equation(self.g0_w, 0.0, sigma_w = self.sigma_w, N_fix = self.N_fix)
+            self.g_w, self.mu_gw = self.dyson_equation(self.g0_w, 0.0, sigma_w = self.sigma_w, N_fix = False)
             # print(f'g_w occupation: {self.N(self.g_w)} at chemical potential {self.mu}')
 
             diff = np.max(np.abs((self.g_w - self.g_w_old)['up'].data))
@@ -76,10 +78,10 @@ class GWSolver():
 
             if iter == max_iter - 1:
                 self.iter_reached = iter
-                if self.verbose:   
-                    print("WARNING: Maximum iterations reached")
+                # if self.verbose:   
+                print("WARNING: Maximum iterations reached")
 
-        # self.g_w, self.mu = self.dyson_equation(self.g0_w, self.mu, sigma_w = self.sigma_w, N_fix = N_fix)
+        self.g_w, self.mu_gw = self.dyson_equation(self.g_w, 0.0, sigma_w = None, N_fix = self.N_fix)
         if self.verbose:
             print(f'g_w occupation: {self.N(self.g_w)} at chemical potential {self.mu}')
         if self.full_mesh:
@@ -93,8 +95,6 @@ class GWSolver():
   
 
     def screened_potential(self, P_w, V, self_interactions): 
-        W = P_w.copy()
-
         V_t = V.copy()
 
         if not self_interactions:
@@ -111,10 +111,10 @@ class GWSolver():
 
         S = inv(D - C * A_inv * B, 8)
 
-        W['up'] = (A_inv + A_inv * B * S * C * A_inv) * V_t - A_inv * B * S * V;
-        W['dn'] = -S * C * A_inv * V + S * V_t;
+        P_w['up'] = (A_inv + A_inv * B * S * C * A_inv) * V_t - A_inv * B * S * V;
+        P_w['dn'] = -S * C * A_inv * V + S * V_t;
         
-        return W
+        return P_w
     
 
     def N(self, g_w):
@@ -137,8 +137,8 @@ class GWSolver():
             previous_direction = None
 
             occupation = self.N(self._dyson_dispatch(g_w, mu, sigma_w))
-            # step = abs(occupation - N_fix)
-            step = 1.0
+            step = abs(occupation - N_fix)
+            # step = 1.0
             while abs(occupation - N_fix) > self.N_tol:
                 # print(f'occupation: {occupation}, mu: {mu}')
 
